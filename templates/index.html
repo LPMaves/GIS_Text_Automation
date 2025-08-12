@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GIS Cost Automation Workflow</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 800px; margin: auto; }
+        input, textarea { width: 100%; }
+        .output { background: #f1f1f1; padding: 15px; margin-top: 20px; }
+        .error { color: red; }
+        .photo { margin-bottom: 20px; text-align: center; }
+        .photo img { max-width: 400px; height: auto; border-radius: 8px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <!-- Display image from static folder -->
+        <div class="photo">
+            <img src="{{ url_for('static', filename='logo.png') }}" alt="GIS Tracker Logo">
+        </div>
+
+        <h2>Upload Excel & Specify Columns</h2>
+        <form method="POST" enctype="multipart/form-data">
+            <label for="excel_file">Excel file:</label> <br>
+            <input type="file" name="excel_file" accept=".xlsx,.xls" required><br><br>
+
+            <label for="required_columns">Required columns (comma-separated):</label> <br>
+            <input type="text" name="required_columns" placeholder="e.g. SOIL_ZONE, TRACKERTYP, HWL_OPT, COST" required><br><br>
+
+            <button type="submit">Submit</button>
+        </form>
+        {% if error_msg %}
+            <div class="error">{{ error_msg }}</div>
+        {% endif %}
+        {% if output_lines %}
+            <div class="output">
+                <h3>Formatted Output</h3>
+                <pre>
+{% for line in output_lines %}
+{{ line }}
+{% endfor %}
+                </pre>
+            </div>
+        {% endif %}
+    </div>
+</body>
+</html>
