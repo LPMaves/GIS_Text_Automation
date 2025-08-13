@@ -4,7 +4,7 @@
     <title>GIS Cost Automation Workflow</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 40px; }
-        .container { max-width: 800px; margin: auto; }
+        .container { max-width: 1000px; margin: auto; }
         input, textarea { width: 100%; }
         .output { background: #f1f1f1; padding: 15px; margin-top: 20px; }
         .error { color: red; }
@@ -15,14 +15,15 @@
 <body>
     <div class="container">
 
+        <h2>Upload Excel & Specify Columns</h2>
+
         <!-- Display image from static folder -->
         <div class="photo">
             <img src="{{ url_for('static', filename='Picture1.png') }}" alt="Excel Example">
         </div>
         
         <h3>Your excel sheet should reflect this set-up with the column names at the cost. Be sure to include 'COST'.<h3>
-
-        <h2>Upload Excel & Specify Columns</h2>
+        
         <form method="POST" enctype="multipart/form-data">
             <label for="excel_file">Excel file:</label> <br>
             <input type="file" name="excel_file" accept=".xlsx,.xls" required><br><br>
