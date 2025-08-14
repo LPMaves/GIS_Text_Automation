@@ -1,93 +1,124 @@
-from flask import Flask, render_template, request
-import pandas as pd
 import os
 import tempfile
+from flask import Flask, render_template, request
+import pandas as pd
 
 app = Flask(__name__)
 
 @app.route("/", methods=["GET", "POST"])
 def index():
-    output_lines = None
     error_msg = None
+    case_code = None
     cost_missing_rows = None
 
     if request.method == "POST":
         file = request.files.get("excel_file")
-        columns = request.form.get("required_columns", "")
         # User does NOT enter COST; always add it for backend processing
-        user_columns = [c.strip() for c in columns.split(",") if c.strip()]
-        # Ensure COST is included
-        required_columns = user_columns.copy()
-        if "COST" not in [c.upper() for c in user_columns]:
-            required_columns.append("COST")
+        columns_from_form = [
+            c.strip() for c in request.form.get("required_columns", "") .split(",") if c.strip()
+        ]
 
-        if not file or not user_columns:
+        # Always append COST if not included (ignore case)
+        upper_cols = [c.upper() for c in columns_from_form]
+        if "COST" not in upper_cols:
+            required_columns = columns_from_form + ["COST"]
+        else:
+            required_columns = columns_from_form
+
+        # Get the subtraction value; default to 0
+        subtract_raw = request.form.get("subtract_value", "")
+        try:
+            subtract_value = float(subtract_raw) if subtract_raw.strip() else 0.0
+        except Exception:
+            error_msg = f"Subtract value must be a number (got '{subtract_raw}')"
+            subtract_value = 0.0
+
+        if not file or not columns_from_form:
             error_msg = "Please upload a file and specify parameter columns."
         else:
             temp_path = os.path.join(tempfile.gettempdir(), file.filename)
             file.save(temp_path)
             try:
                 df = pd.read_excel(temp_path)
+                # Validate column presence
                 missing_cols = [col for col in required_columns if col not in df.columns]
                 if missing_cols:
                     error_msg = f"Missing columns in Excel file: {missing_cols}"
                 else:
-                    # Identify rows with missing COST values for user feedback
+                    # COST row-wise missing checks (using pandas NA/nan logic)
                     cost_missing_rows = [
-                        idx + 2  # Excel-style (1-based, +header row)
+                        idx + 2  # +2 for Excel-like row number (header is row 1)
                         for idx, val in df["COST"].items()
                         if pd.isna(val) or str(val).strip() == "" or val is None
                     ]
+
                     if not cost_missing_rows:
-                        # Map column types: text or numeric
-                        col_types = {}
-                        for col in required_columns:
-                            series = df[col]
-                            if col.upper() == "COST":
-                                col_types[col] = "numeric"
-                            elif pd.api.types.is_numeric_dtype(series):
-                                col_types[col] = "numeric"
-                            else:
-                                col_types[col] = "text"
-                        lines = []
+                        # Build CASE lines
+                        case_lines = []
+                        param_columns = [col for col in required_columns if col.upper() != "COST"]
+
                         for _, row in df.iterrows():
-                            clauses = []
-                            # All columns except COST for 'WHEN ... AND ...'
-                            for col in required_columns[:-1]:
-                                col_name_quoted = f'"{col}"'
+                            # Build condition for the CASE line
+                            conditions = []
+                            for col in param_columns:
+                                col_fmt = f'"{col}"'
                                 val = row[col]
-                                if col_types[col] == "numeric":
+                                # Numeric vs text detection
+                                if pd.api.types.is_numeric_dtype(df[col]):
                                     try:
-                                        val_num = float(str(val).replace('$', '').replace(',', ''))
-                                        val_fmt = f"{val_num}"
+                                        if pd.isna(val) or val is None or str(val).strip() == '':
+                                            val_fmt = 'NULL'
+                                        else:
+                                            val_fmt = float(val)
                                     except Exception:
                                         val_fmt = val
-                                    formatted = f'{col_name_quoted} {val_fmt}'
+                                    cond = f'{col_fmt} = {val_fmt}'
                                 else:
-                                    formatted = f"{col_name_quoted} '{val}'"
-                                clauses.append(formatted)
-                            # COST column for THEN statement
+                                    cond = f"{col_fmt} = '{val}'"
+                                conditions.append(cond)
+                            # Format cost for THEN clause
                             cost_val = row["COST"]
+                            if isinstance(cost_val, str):
+                                cost_val = cost_val.replace('$', '').replace(',', '')
                             try:
-                                cost_val = float(str(cost_val).replace('$', '').replace(',', ''))
-                                cost_fmt = f"{cost_val:.4f}"
+                                cost_float = float(cost_val)
+                                cost_str = f"{cost_float:.2f}"
                             except Exception:
-                                cost_fmt = str(cost_val)
-                            cost_clause = f'"COST" {cost_fmt}'
-                            # Compose output line
-                            when_and = " AND ".join(clauses)
-                            output_line = f'WHEN {when_and} THEN {cost_clause}'
-                            lines.append(output_line)
-                        output_lines = lines
+                                cost_str = str(cost_val)
+                            line = f"WHEN " + " AND ".join(conditions) + f" THEN {cost_str}"
+                            case_lines.append(line)
+
+                        # Compose the full block as specified
+                        case_block = (
+                            "'$' || format_number(\n"
+                            "  aggregate(\n"
+                            "      layer:='Trackers_Layer',\n"
+                            "      aggregate:='sum',\n"
+                            "      expression:=\n"
+                            "          CASE\n"
+                        )
+                        for cl in case_lines:
+                            case_block += f"              {cl}\n"
+                        case_block += (
+                            "              ELSE 0\n"
+                            "          END\n"
+                            "      ,2)\n"
+                            f"  - {subtract_value:.4f}                        -- we are now subtracting the summation of the cost of the design\n"
+                            ")\n)\n"
+                        )
+
+                        case_code = case_block
+
             except Exception as e:
-                error_msg = str(e)
+                error_msg = f"Processing error: {e}"
             finally:
-                os.remove(temp_path)
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
 
     return render_template(
         "index.html",
-        output_lines=output_lines,
         error_msg=error_msg,
+        case_code=case_code,
         cost_missing_rows=cost_missing_rows
     )
 
