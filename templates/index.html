@@ -9,7 +9,7 @@
         .output { background: #f1f1f1; padding: 15px; margin-top: 20px; border-radius: 6px; }
         .error { color: red; margin-top: 18px; margin-bottom: 18px; font-weight: 600; }
         .photo { margin-bottom: 20px; text-align: center; }
-        .photo img { max-width: 600px; height: auto; border-radius: 8px; }
+        .photo img { max-width: 800px; height: auto; border-radius: 8px; }
         label { font-weight: bold; }
         .case-code-block {
             background: #272822;
@@ -21,9 +21,10 @@
             margin-top: 20px;
             white-space: pre;
             overflow-x: auto;
+            max-height: 600px;
         }
         .copy-btn {
-            margin: 8px 0 16px 0;
+            margin: 10px 0 16px 0;
             padding: 7px 20px;
             background: #378AD5;
             color: white;
@@ -42,7 +43,7 @@
             if (code) {
                 var text = code.innerText || code.textContent;
                 navigator.clipboard.writeText(text)
-                    .then(() => { alert("CASE code copied to clipboard!"); });
+                    .then(() => { alert("CASE statement copied to clipboard!"); });
             }
         }
     </script>
@@ -61,7 +62,7 @@
             <input type="file" name="excel_file" accept=".xlsx,.xls" required><br><br>
 
             <label for="required_columns">Scope Parameters/Columns (comma-separated, <strong>do not include 'COST'</strong>):</label> <br>
-            <input type="text" name="required_columns" placeholder="e.g. COLUMN1, COLUMN2, COLUMN3" required><br><br>
+            <input type="text" name="required_columns" placeholder="e.g. SOIL_ZONE, TRACKERTYP, HWL_OPT" required><br><br>
 
             <label for="subtract_value">Subtract value from sum (default 0):</label> <br>
             <input type="number" step="any" name="subtract_value" placeholder="0"><br><br>
@@ -84,6 +85,7 @@
             <div class="output">
                 <h3>Generated Statement Code</h3>
                 <button type="button" class="copy-btn" onclick="copyCodeBlock()">Copy to Clipboard</button>
+                <!-- The full CASE statement displays here! -->
                 <pre class="case-code-block" id="caseCodeBlock">{{ case_code }}</pre>
             </div>
         {% endif %}
