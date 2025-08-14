@@ -5,47 +5,89 @@
     <style>
         body { font-family: Arial, sans-serif; margin: 40px; }
         .container { max-width: 1000px; margin: auto; }
-        input, textarea { width: 100%; }
-        .output { background: #f1f1f1; padding: 15px; margin-top: 20px; }
-        .error { color: red; }
+        input, textarea { width: 100%; box-sizing: border-box; }
+        .output { background: #f1f1f1; padding: 15px; margin-top: 20px; border-radius: 6px; }
+        .error { color: red; margin-top: 18px; margin-bottom: 18px; font-weight: 600; }
         .photo { margin-bottom: 20px; text-align: center; }
         .photo img { max-width: 400px; height: auto; border-radius: 8px; }
+        label { font-weight: bold; }
+        .case-code-block {
+            background: #272822;
+            color: #f8f8f2;
+            padding: 18px;
+            font-family: 'Consolas', 'Monaco', 'Menlo', monospace;
+            border-radius: 6px;
+            font-size: 1em;
+            margin-top: 20px;
+            white-space: pre;
+            overflow-x: auto;
+        }
+        .copy-btn {
+            margin: 8px 0 16px 0;
+            padding: 7px 20px;
+            background: #378AD5;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1em;
+        }
+        .copy-btn:active {
+            background: #295e88;
+        }
     </style>
+    <script>
+        function copyCodeBlock() {
+            var code = document.getElementById("caseCodeBlock");
+            if (code) {
+                var text = code.innerText || code.textContent;
+                navigator.clipboard.writeText(text)
+                    .then(() => { alert("CASE code copied to clipboard!"); });
+            }
+        }
+    </script>
 </head>
 <body>
     <div class="container">
 
-        <h2>Upload Excel & Specify Columns</h2>
+        <h2>Upload Excel & Specify Parameters</h2>
 
-        <!-- Display image from static folder -->
         <div class="photo">
-            <img src="{{ url_for('static', filename='Picture1.png') }}" alt="Excel Example">
+            <img src="{{ url_for('static', filename='Picture2.png') }}" alt="Excel Example">
         </div>
-        
-        <h3>Your excel sheet should reflect this set-up with the column names at the cost. Be sure to include 'COST'.<h3>
-        
+
         <form method="POST" enctype="multipart/form-data">
-            <label for="excel_file">Excel file:</label> <br>
+            <label for="excel_file">Formatted excel file:</label> <br>
             <input type="file" name="excel_file" accept=".xlsx,.xls" required><br><br>
 
-            <label for="required_columns">Required columns (comma-separated):</label> <br>
-            <input type="text" name="required_columns" placeholder="e.g. SOIL_ZONE, TRACKERTYP, HWL_OPT, COST" required><br><br>
+            <label for="required_columns">Scope Parameters/Columns (comma-separated, <strong>do not include 'COST'</strong>):</label> <br>
+            <input type="text" name="required_columns" placeholder="e.g. COLUMN1, COLUMN2, COLUMN3" required><br><br>
+
+            <label for="subtract_value">Subtract value from sum (default 0):</label> <br>
+            <input type="number" step="any" name="subtract_value" placeholder="0"><br><br>
 
             <button type="submit">Submit</button>
         </form>
+
         {% if error_msg %}
             <div class="error">{{ error_msg }}</div>
         {% endif %}
-        {% if output_lines %}
-            <div class="output">
-                <h3>Formatted Output</h3>
-                <pre>
-{% for line in output_lines %}
-{{ line }}
-{% endfor %}
-                </pre>
+
+        {% if cost_missing_rows %}
+            <div class="error">
+                One or more rows in your Excel file are missing a <strong>'COST'</strong> value.<br>
+                Please check and fill in the 'COST' entry for row(s): {{ cost_missing_rows|join(', ') }}
             </div>
         {% endif %}
+
+        {% if case_code %}
+            <div class="output">
+                <h3>Generated Statement Code</h3>
+                <button type="button" class="copy-btn" onclick="copyCodeBlock()">Copy to Clipboard</button>
+                <pre class="case-code-block" id="caseCodeBlock">{{ case_code }}</pre>
+            </div>
+        {% endif %}
+
     </div>
 </body>
 </html>
