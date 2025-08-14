@@ -13,11 +13,12 @@ def index():
 
     if request.method == "POST":
         file = request.files.get("excel_file")
-        # User does NOT enter COST; always add it for backend processing
         columns_from_form = [
             c.strip() for c in request.form.get("required_columns", "") .split(",") if c.strip()
         ]
-
+        layer_name = request.form.get("layer_name", "").strip()
+        if not layer_name:
+            error_msg = "Layer name is required."
         # Always append COST if not included (ignore case)
         upper_cols = [c.upper() for c in columns_from_form]
         if "COST" not in upper_cols:
@@ -33,8 +34,9 @@ def index():
             error_msg = f"Subtract value must be a number (got '{subtract_raw}')"
             subtract_value = 0.0
 
-        if not file or not columns_from_form:
-            error_msg = "Please upload a file and specify parameter columns."
+        if not file or not columns_from_form or not layer_name:
+            if not error_msg:
+                error_msg = "Please upload a file, specify parameter columns, and enter a layer name."
         else:
             temp_path = os.path.join(tempfile.gettempdir(), file.filename)
             file.save(temp_path)
@@ -58,12 +60,10 @@ def index():
                         param_columns = [col for col in required_columns if col.upper() != "COST"]
 
                         for _, row in df.iterrows():
-                            # Build condition for the CASE line
                             conditions = []
                             for col in param_columns:
                                 col_fmt = f'"{col}"'
                                 val = row[col]
-                                # Numeric vs text detection
                                 if pd.api.types.is_numeric_dtype(df[col]):
                                     try:
                                         if pd.isna(val) or val is None or str(val).strip() == '':
@@ -76,7 +76,6 @@ def index():
                                 else:
                                     cond = f"{col_fmt} = '{val}'"
                                 conditions.append(cond)
-                            # Format cost for THEN clause
                             cost_val = row["COST"]
                             if isinstance(cost_val, str):
                                 cost_val = cost_val.replace('$', '').replace(',', '')
@@ -88,11 +87,11 @@ def index():
                             line = f"WHEN " + " AND ".join(conditions) + f" THEN {cost_str}"
                             case_lines.append(line)
 
-                        # Compose the full block as specified
+                        # Compose the full CASE block including the provided layer name
                         case_block = (
                             "'$' || format_number(\n"
-                            "  aggregate(\n"
-                            "      layer:='Trackers_Layer',\n"
+                            f"  aggregate(\n"
+                            f"      layer:='{layer_name}',\n"
                             "      aggregate:='sum',\n"
                             "      expression:=\n"
                             "          CASE\n"
