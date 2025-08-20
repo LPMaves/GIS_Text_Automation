@@ -9,7 +9,7 @@ app = Flask(__name__)
 def index():
     error_msg = None
     case_code = None
-    cost_missing_rows = None
+    missing_value_info = {}
 
     if request.method == "POST":
         file = request.files.get("excel_file")
@@ -19,6 +19,7 @@ def index():
         layer_name = request.form.get("layer_name", "").strip()
         if not layer_name:
             error_msg = "Layer name is required."
+
         # Always append COST if not included (ignore case)
         upper_cols = [c.upper() for c in columns_from_form]
         if "COST" not in upper_cols:
@@ -42,20 +43,26 @@ def index():
             file.save(temp_path)
             try:
                 df = pd.read_excel(temp_path)
+
                 # Validate column presence
                 missing_cols = [col for col in required_columns if col not in df.columns]
                 if missing_cols:
                     error_msg = f"Missing columns in Excel file: {missing_cols}"
                 else:
-                    # COST row-wise missing checks (using pandas NA/nan logic)
-                    cost_missing_rows = [
-                        idx + 2  # +2 for Excel-like row number (header is row 1)
-                        for idx, val in df["COST"].items()
-                        if pd.isna(val) or str(val).strip() == "" or val is None
-                    ]
+                    # Scan for missing values in any required column (including COST)
+                    missing_value_info = {}  # key: column, value: [row_numbers]
+                    num_rows = df.shape[0]
+                    for col in required_columns:
+                        missing_row_list = []
+                        for idx in range(num_rows):
+                            val = df.at[idx, col]
+                            if pd.isna(val) or str(val).strip() == "" or val is None:
+                                missing_row_list.append(idx + 2)  # Excel-style row (header=1, first data row=2)
+                        if missing_row_list:
+                            missing_value_info[col] = missing_row_list
 
-                    if not cost_missing_rows:
-                        # Build CASE lines
+                    # Only generate CASE statement if no missing values in required columns
+                    if not missing_value_info:
                         case_lines = []
                         param_columns = [col for col in required_columns if col.upper() != "COST"]
 
@@ -87,7 +94,6 @@ def index():
                             line = f"WHEN " + " AND ".join(conditions) + f" THEN {cost_str}"
                             case_lines.append(line)
 
-                        # Compose the full CASE block including the provided layer name
                         case_block = (
                             "'$' || format_number(\n"
                             f"  aggregate(\n"
@@ -105,7 +111,6 @@ def index():
                             f"  - {subtract_value:.4f}                        -- we are now subtracting the summation of the cost of the design\n"
                             ")\n)\n"
                         )
-
                         case_code = case_block
 
             except Exception as e:
@@ -114,11 +119,19 @@ def index():
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
 
+    # Build error message for missing values, if present
+    missing_info_msg = None
+    if missing_value_info:
+        err_rows = []
+        for col, rows in missing_value_info.items():
+            err_rows.append(f'"{col}" missing values in row(s): {", ".join(str(r) for r in rows)}')
+        missing_info_msg = "Some rows in your Excel file have missing values:<br>" + "<br>".join(err_rows)
+
     return render_template(
         "index.html",
-        error_msg=error_msg,
+        error_msg=error_msg or missing_info_msg,
         case_code=case_code,
-        cost_missing_rows=cost_missing_rows
+        cost_missing_rows=None  # not needed; replaced by general missing_info_msg
     )
 
 if __name__ == "__main__":
