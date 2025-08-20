@@ -9,7 +9,7 @@ app = Flask(__name__)
 def index():
     error_msg = None
     case_code = None
-    missing_value_info = {}
+    missing_value_lines = None
 
     if request.method == "POST":
         file = request.files.get("excel_file")
@@ -43,14 +43,13 @@ def index():
             file.save(temp_path)
             try:
                 df = pd.read_excel(temp_path)
-
                 # Validate column presence
                 missing_cols = [col for col in required_columns if col not in df.columns]
                 if missing_cols:
                     error_msg = f"Missing columns in Excel file: {missing_cols}"
                 else:
                     # Scan for missing values in any required column (including COST)
-                    missing_value_info = {}  # key: column, value: [row_numbers]
+                    missing_value_lines = []
                     num_rows = df.shape[0]
                     for col in required_columns:
                         missing_row_list = []
@@ -59,10 +58,10 @@ def index():
                             if pd.isna(val) or str(val).strip() == "" or val is None:
                                 missing_row_list.append(idx + 2)  # Excel-style row (header=1, first data row=2)
                         if missing_row_list:
-                            missing_value_info[col] = missing_row_list
+                            missing_value_lines.append((col, missing_row_list))
 
                     # Only generate CASE statement if no missing values in required columns
-                    if not missing_value_info:
+                    if not missing_value_lines:
                         case_lines = []
                         param_columns = [col for col in required_columns if col.upper() != "COST"]
 
@@ -71,6 +70,7 @@ def index():
                             for col in param_columns:
                                 col_fmt = f'"{col}"'
                                 val = row[col]
+                                # Numeric vs text detection
                                 if pd.api.types.is_numeric_dtype(df[col]):
                                     try:
                                         if pd.isna(val) or val is None or str(val).strip() == '':
@@ -119,19 +119,11 @@ def index():
                 if os.path.exists(temp_path):
                     os.remove(temp_path)
 
-    # Build error message for missing values, if present
-    missing_info_msg = None
-    if missing_value_info:
-        err_rows = []
-        for col, rows in missing_value_info.items():
-            err_rows.append(f'"{col}" missing values in row(s): {", ".join(str(r) for r in rows)}')
-        missing_info_msg = "Some rows in your Excel file have missing values:<br>" + "<br>".join(err_rows)
-
     return render_template(
         "index.html",
-        error_msg=error_msg or missing_info_msg,
+        error_msg=error_msg,
         case_code=case_code,
-        cost_missing_rows=None  # not needed; replaced by general missing_info_msg
+        missing_value_lines=missing_value_lines
     )
 
 if __name__ == "__main__":
