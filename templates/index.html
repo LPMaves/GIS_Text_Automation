@@ -41,6 +41,10 @@
         .copy-btn:active {
             background: #295e88;
         }
+        ul {
+            margin: 8px 0 0 20px;
+            padding-left: 16px;
+        }
     </style>
     <script>
         function copyCodeBlock() {
@@ -62,13 +66,13 @@
         </div>
 
         <form method="POST" enctype="multipart/form-data">
-            <label for="excel_file">Formatted excel file:</label> <br>
+            <label for="excel_file">Formatted Excel file:</label> <br>
             <input type="file" name="excel_file" accept=".xlsx,.xls" required><br><br>
 
-            <label for="layer_name">Layer name (used in code output):</label> <br>
-            <input type="text" name="layer_name" placeholder="e.g. ES_Trackers_V05" required><br><br>
+            <label for="layer_name">Layer Name (used in code output):</label> <br>
+            <input type="text" name="layer_name" placeholder="e.g. Trackers_Layer" required><br><br>
 
-            <label for="required_columns">Scope Parameters/Columns (comma-separated, <strong>do not include 'COST'</strong>):</label> <br>
+            <label for="required_columns">Required Parameters/Columns (comma-separated, <strong>do not include 'COST'</strong>):</label> <br>
             <input type="text" name="required_columns" placeholder="e.g. SOIL_ZONE, TRACKERTYP, HWL_OPT" required><br><br>
 
             <label for="subtract_value">Subtract value from sum (default 0):</label> <br>
@@ -81,10 +85,16 @@
             <div class="error">{{ error_msg }}</div>
         {% endif %}
 
-        {% if cost_missing_rows %}
+        {% if missing_value_lines %}
             <div class="error">
-                One or more rows in your Excel file are missing a <strong>'COST'</strong> value.<br>
-                Please check and fill in the 'COST' entry for row(s): {{ cost_missing_rows|join(', ') }}
+                Some rows in your Excel file have missing values:
+                <ul>
+                {% for col, rows in missing_value_lines %}
+                    <li>
+                        <strong>"{{ col }}"</strong> missing values in row(s): {{ rows | join(', ') }}
+                    </li>
+                {% endfor %}
+                </ul>
             </div>
         {% endif %}
 
